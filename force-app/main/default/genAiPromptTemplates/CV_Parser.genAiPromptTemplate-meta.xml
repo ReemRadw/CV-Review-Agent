@@ -1,0 +1,45 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<GenAiPromptTemplate xmlns="http://soap.sforce.com/2006/04/metadata">
+    <activeVersionIdentifier>BgapFCbH0zXpK81KcPGzBcFNc3FFkBcfqOd9UNNKcXc=_1</activeVersionIdentifier>
+    <description>Extracts a structured candidate card (JSON) from raw CV text.</description>
+    <developerName>CV_Parser</developerName>
+    <masterLabel>CV Parser</masterLabel>
+    <overridable>false</overridable>
+    <templateVersions>
+        <content>You are a CV parsing service. Extract a candidate profile from the CV text below.
+
+Rules:
+- Return ONLY a valid JSON object. No markdown fences, no explanation.
+- Use null (or an empty array) for anything that is not explicitly written in the CV.
+- Never infer, estimate or invent values. Copy email and phone exactly as written.
+- yearsOfExperience: only if the CV states it, or if it can be computed directly from explicit employment dates; otherwise null.
+- conflicts: list contradictions inside the CV (e.g. two different emails, overlapping or impossible dates, stated years that do not match the job history).
+
+Schema:
+{&quot;name&quot;: string|null, &quot;email&quot;: string|null, &quot;phone&quot;: string|null, &quot;title&quot;: string|null,
+ &quot;yearsOfExperience&quot;: integer|null,
+ &quot;skills&quot;: [string],
+ &quot;experience&quot;: [{&quot;role&quot;: string, &quot;company&quot;: string, &quot;period&quot;: string, &quot;summary&quot;: string}],
+ &quot;education&quot;: [{&quot;degree&quot;: string, &quot;institution&quot;: string, &quot;year&quot;: string}],
+ &quot;achievements&quot;: [string],
+ &quot;conflicts&quot;: [string]}
+
+CV text:
+&quot;&quot;&quot;
+{!$Input:CV_Text}
+&quot;&quot;&quot;</content>
+        <inputs>
+            <apiName>CV_Text</apiName>
+            <definition>primitive://String</definition>
+            <masterLabel>CV Text</masterLabel>
+            <referenceName>Input:CV_Text</referenceName>
+            <required>true</required>
+        </inputs>
+        <isCitationEnabled>false</isCitationEnabled>
+        <primaryModel>sfdc_ai__DefaultGPT4Omni</primaryModel>
+        <status>Published</status>
+        <versionIdentifier>BgapFCbH0zXpK81KcPGzBcFNc3FFkBcfqOd9UNNKcXc=_1</versionIdentifier>
+    </templateVersions>
+    <type>einstein_gpt__flex</type>
+    <visibility>Global</visibility>
+</GenAiPromptTemplate>

@@ -1,0 +1,215 @@
+<template>
+    <article class="shell">
+        <!-- Header -->
+        <header class="hero">
+            <div class="hero__text">
+                <p class="hero__eyebrow">Recruiting · CV Intake</p>
+                <h2 class="hero__title">Upload candidate CVs</h2>
+                <p class="hero__subtitle">
+                    Drop PDF or Word files. Text is extracted in your browser, structured into a candidate card and
+                    saved with the original file attached.
+                </p>
+            </div>
+            <div class="hero__stats">
+                <template for:each={stats} for:item="stat">
+                    <div key={stat.key} class={stat.css}>
+                        <span class="stat__value">{stat.value}</span>
+                        <span class="stat__label">{stat.label}</span>
+                    </div>
+                </template>
+            </div>
+        </header>
+
+        <div class="body">
+            <template lwc:if={libraryError}>
+                <div class="notice notice_error" role="alert">
+                    <lightning-icon icon-name="utility:error" size="x-small" variant="inverse"></lightning-icon>
+                    <span>{libraryError}</span>
+                </div>
+            </template>
+
+            <!-- Drop zone -->
+            <div
+                class={dropzoneClass}
+                role="button"
+                tabindex="0"
+                aria-label="Upload CV files"
+                ondragover={handleDragOver}
+                ondragleave={handleDragLeave}
+                ondrop={handleDrop}
+                onclick={openFilePicker}
+                onkeydown={handleDropzoneKey}
+            >
+                <div class="dropzone__icon">
+                    <lightning-icon icon-name="utility:upload" size="medium"></lightning-icon>
+                </div>
+                <template lwc:if={librariesReady}>
+                    <p class="dropzone__title">Drag &amp; drop CVs here, or <span class="link">browse</span></p>
+                    <p class="dropzone__hint">PDF · DOCX · TXT — multiple files, up to 10 MB each</p>
+                </template>
+                <template lwc:else>
+                    <lightning-spinner alternative-text="Loading readers" size="small"></lightning-spinner>
+                    <p class="dropzone__hint">Preparing document readers…</p>
+                </template>
+            </div>
+            <input
+                class="slds-assistive-text"
+                type="file"
+                multiple
+                accept={acceptAttr}
+                onchange={handleFileInput}
+                tabindex="-1"
+            />
+
+            <!-- Queue -->
+            <template lwc:if={hasItems}>
+                <div class="toolbar">
+                    <span class="toolbar__title">Files</span>
+                    <div class="toolbar__actions">
+                        <lightning-button
+                            label="Clear"
+                            icon-name="utility:clear"
+                            onclick={clearAll}
+                            disabled={clearDisabled}
+                        ></lightning-button>
+                        <lightning-button
+                            variant="brand"
+                            label={processLabel}
+                            icon-name="utility:einstein"
+                            onclick={processAll}
+                            disabled={processDisabled}
+                        ></lightning-button>
+                    </div>
+                </div>
+
+                <ul class="file-list">
+                    <template for:each={items} for:item="item">
+                        <li key={item.key} class={item.rowClass}>
+                            <div class="file-row__main">
+                                <lightning-icon icon-name={item.iconName} size="small"></lightning-icon>
+                                <div class="file-row__info">
+                                    <p class="file-row__name" title={item.name}>{item.name}</p>
+                                    <p class="file-row__meta">{item.sizeLabel} · {item.stageLabel}</p>
+                                </div>
+                                <template lwc:if={item.isActive}>
+                                    <lightning-spinner
+                                        class="file-row__spinner"
+                                        size="x-small"
+                                        alternative-text={item.stageLabel}
+                                    ></lightning-spinner>
+                                </template>
+                                <template lwc:if={item.canRemove}>
+                                    <lightning-button-icon
+                                        icon-name="utility:close"
+                                        variant="bare"
+                                        alternative-text="Remove"
+                                        data-key={item.key}
+                                        onclick={removeItem}
+                                    ></lightning-button-icon>
+                                </template>
+                            </div>
+
+                            <div class="progress" aria-hidden="true">
+                                <div class="progress__bar" style={item.progressStyle}></div>
+                            </div>
+
+                            <template lwc:if={item.isError}>
+                                <p class="file-row__error">
+                                    <lightning-icon icon-name="utility:warning" size="xx-small"></lightning-icon>
+                                    {item.error}
+                                </p>
+                            </template>
+
+                            <template lwc:if={item.isDone}>
+                                <div class="card">
+                                    <div class="card__head">
+                                        <div>
+                                            <button
+                                                class="card__name"
+                                                data-id={item.result.candidateId}
+                                                onclick={openRecord}
+                                            >
+                                                {item.result.candidateName}
+                                            </button>
+                                            <p class="card__title">
+                                                <template lwc:if={item.result.title}>{item.result.title} · </template>
+                                                {item.result.experienceLabel}
+                                            </p>
+                                        </div>
+                                        <span class={item.result.badgeClass}>{item.result.status}</span>
+                                    </div>
+
+                                    <template lwc:if={item.result.hasSkills}>
+                                        <div class="chips">
+                                            <template for:each={item.result.topSkills} for:item="skill">
+                                                <span key={skill} class="chip">{skill}</span>
+                                            </template>
+                                            <template lwc:if={item.result.moreSkills}>
+                                                <span class="chip chip_more">{item.result.moreSkills}</span>
+                                            </template>
+                                        </div>
+                                    </template>
+
+                                    <template lwc:if={item.result.hasMissing}>
+                                        <div class="flag flag_warning">
+                                            <span class="flag__label">Not stated in CV</span>
+                                            <div class="chips">
+                                                <template for:each={item.result.missingFields} for:item="field">
+                                                    <span key={field} class="chip chip_warning">{field}</span>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </template>
+
+                                    <template lwc:if={item.result.hasConflicts}>
+                                        <div class="flag flag_error">
+                                            <span class="flag__label">Conflicts</span>
+                                            <ul class="flag__list">
+                                                <template for:each={item.result.conflicts} for:item="conflict">
+                                                    <li key={conflict}>{conflict}</li>
+                                                </template>
+                                            </ul>
+                                        </div>
+                                    </template>
+
+                                    <p class="card__foot">
+                                        {item.result.sourceLabel} · parsed by {item.result.parsedBy}
+                                        <template lwc:if={item.warning}> · {item.warning}</template>
+                                    </p>
+                                </div>
+                            </template>
+                        </li>
+                    </template>
+                </ul>
+            </template>
+
+            <!-- Recent -->
+            <section class="recent">
+                <div class="toolbar">
+                    <span class="toolbar__title">Recently processed</span>
+                    <lightning-button-icon
+                        icon-name="utility:refresh"
+                        variant="bare"
+                        alternative-text="Refresh"
+                        onclick={loadRecent}
+                    ></lightning-button-icon>
+                </div>
+                <template lwc:if={hasRecent}>
+                    <ul class="recent__list">
+                        <template for:each={recentCandidates} for:item="row">
+                            <li key={row.Id} class="recent__row">
+                                <button class="recent__name" data-id={row.Id} onclick={openRecord}>{row.Name}</button>
+                                <span class="recent__title">{row.Title__c}</span>
+                                <span class="recent__years">{row.yearsLabel}</span>
+                                <span class={row.badgeClass}>{row.Data_Status__c}</span>
+                            </li>
+                        </template>
+                    </ul>
+                </template>
+                <template lwc:else>
+                    <p class="empty">No candidates yet. Upload a CV to get started.</p>
+                </template>
+            </section>
+        </div>
+    </article>
+</template>
