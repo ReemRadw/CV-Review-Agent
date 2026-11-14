@@ -10,8 +10,12 @@
  * values that cannot be found in the CV are dropped and flagged.
  */
 public with sharing class CvParserService {
-    public static final String PROMPT_TEMPLATE = 'CV_Parser';
-    private static final Integer MAX_PROMPT_CHARS = 30000;
+    public static final String PARSED_BY_LLM = 'Prompt Template';
+    public static final String PARSED_BY_RULES = 'Rule-based fallback';
+
+    /** Swappable so unit tests can mock the model (see CvLlmMock). */
+    @TestVisible
+    private static CvLlmClient llm = new PromptTemplateCvLlmClient();
 
     private static final Pattern EMAIL_PATTERN = Pattern.compile(
         '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}'
@@ -23,29 +27,28 @@ public with sharing class CvParserService {
         '(?i)(\\d{1,2})\\+?\\s*(?:years|yrs)'
     );
 
-    @TestVisible
-    private static Boolean forceFallback = false;
-
     public static ParsedCv parse(String cvText) {
         if (String.isBlank(cvText)) {
             throw new CvParseException('The file contains no readable text.');
         }
 
         ParsedCv result;
-        if (!forceFallback) {
-            try {
-                result = parseWithPromptTemplate(cvText);
-                result.parsedBy = 'Prompt Template';
-            } catch (Exception e) {
-                System.debug(LoggingLevel.WARN, 'Prompt template failed, using fallback: ' + e.getMessage());
-            }
+        String fallbackReason;
+        try {
+            result = parseWithLlm(cvText);
+            result.parsedBy = PARSED_BY_LLM;
+        } catch (Exception e) {
+            fallbackReason = e.getTypeName() + ': ' + e.getMessage();
+            System.debug(LoggingLevel.WARN, 'LLM parsing failed, using rule-based fallback. ' + fallbackReason);
         }
         if (result == null) {
             result = parseWithRules(cvText);
-            result.parsedBy = 'Rule-based fallback';
+            result.parsedBy = PARSED_BY_RULES;
+            result.fallbackReason = fallbackReason;
         }
 
         result.normalize();
+        reconcileYears(result);
         validateAgainstSource(result, cvText);
         computeMissingFields(result);
         return result;
@@ -53,24 +56,12 @@ public with sharing class CvParserService {
 
     // ------------------------------------------------------------------ LLM
 
-    private static ParsedCv parseWithPromptTemplate(String cvText) {
-        ConnectApi.WrappedValue textValue = new ConnectApi.WrappedValue();
-        textValue.value = cvText.abbreviate(MAX_PROMPT_CHARS);
-
-        ConnectApi.EinsteinPromptTemplateGenerationsInput input = new ConnectApi.EinsteinPromptTemplateGenerationsInput();
-        input.isPreview = false;
-        input.inputParams = new Map<String, ConnectApi.WrappedValue>{ 'Input:CV_Text' => textValue };
-        input.additionalConfig = new ConnectApi.EinsteinLlmAdditionalConfigInput();
-        input.additionalConfig.applicationName = 'PromptBuilderPreview';
-
-        ConnectApi.EinsteinPromptTemplateGenerationsRepresentation output = ConnectApi.EinsteinLLM.generateMessagesForPromptTemplate(
-            PROMPT_TEMPLATE,
-            input
-        );
-        if (output.generations == null || output.generations.isEmpty()) {
-            throw new CvParseException('Prompt template returned no generations.');
+    private static ParsedCv parseWithLlm(String cvText) {
+        String raw = llm.generate(cvText);
+        if (String.isBlank(raw)) {
+            throw new CvParseException('The model returned an empty response.');
         }
-        return (ParsedCv) JSON.deserialize(extractJson(output.generations[0].text), ParsedCv.class);
+        return (ParsedCv) JSON.deserialize(extractJson(raw), ParsedCv.class);
     }
 
     /** Models sometimes wrap JSON in ```json fences or add a sentence - keep only the object. */
@@ -94,7 +85,10 @@ public with sharing class CvParserService {
         if (!emails.isEmpty()) {
             cv.email = new List<String>(emails)[0];
             if (emails.size() > 1) {
-                cv.conflicts.add('Multiple email addresses found: ' + String.join(new List<String>(emails), ', '));
+                cv.conflicts.add(
+                    'Email: the CV lists more than one address (' + String.join(new List<String>(emails), ', ') +
+                    '). The first one was saved; please confirm the preferred contact.'
+                );
             }
         }
 
@@ -124,6 +118,10 @@ public with sharing class CvParserService {
         Matcher years = YEARS_PATTERN.matcher(cvText);
         if (years.find()) {
             cv.yearsOfExperience = Integer.valueOf(years.group(1));
+            cv.uncertainties.add(
+                'Years of experience: taken from the phrase "' + years.group().trim() +
+                '" by the rule-based parser and not cross-checked against employment dates.'
+            );
         }
 
         cv.skills = extractSection(cvText, new List<String>{ 'skills', 'technical skills', 'core skills' });
@@ -172,6 +170,34 @@ public with sharing class CvParserService {
     // ------------------------------------------------------------ Validation
 
     /**
+     * The model reports what the CV claims and what the dates imply; the comparison
+     * is done here so the rule is deterministic and testable.
+     * A gap of 2+ years is reported as a conflict (often an outdated CV).
+     */
+    @TestVisible
+    private static void reconcileYears(ParsedCv cv) {
+        Integer stated = cv.statedYearsOfExperience;
+        Integer computed = cv.computedYearsOfExperience;
+        if (stated == null && computed == null) {
+            return; // keep whatever the fallback parser found
+        }
+        if (stated != null) {
+            cv.yearsOfExperience = stated;
+            if (computed != null && Math.abs(stated - computed) >= 2) {
+                cv.conflicts.add(
+                    'Years of experience: the CV states ' + stated + ' years, but the listed employment dates add up to about ' +
+                    computed + ' years. The CV may be out of date; please confirm with the candidate.'
+                );
+            }
+        } else {
+            cv.yearsOfExperience = computed;
+            cv.uncertainties.add(
+                'Years of experience: not stated in the CV; estimated as ' + computed + ' years from the employment dates.'
+            );
+        }
+    }
+
+    /**
      * Guard against hallucinated contact details: anything the model returned
      * for email/phone must literally exist in the CV text.
      */
@@ -179,19 +205,25 @@ public with sharing class CvParserService {
     private static void validateAgainstSource(ParsedCv cv, String cvText) {
         String haystack = cvText.toLowerCase();
         if (String.isNotBlank(cv.email) && !haystack.contains(cv.email.toLowerCase())) {
-            cv.conflicts.add('Extracted email "' + cv.email + '" does not appear in the CV - discarded.');
+            cv.conflicts.add(
+                'Email: the extracted value "' + cv.email + '" could not be verified against the CV text and was not saved.'
+            );
             cv.email = null;
         }
         if (String.isNotBlank(cv.phone)) {
             String digits = cv.phone.replaceAll('\\D', '');
             String sourceDigits = cvText.replaceAll('\\D', '');
             if (digits.length() < 7 || !sourceDigits.contains(digits)) {
-                cv.conflicts.add('Extracted phone "' + cv.phone + '" does not appear in the CV - discarded.');
+                cv.conflicts.add(
+                    'Phone: the extracted value "' + cv.phone + '" could not be verified against the CV text and was not saved.'
+                );
                 cv.phone = null;
             }
         }
         if (cv.yearsOfExperience != null && (cv.yearsOfExperience < 0 || cv.yearsOfExperience > 60)) {
-            cv.conflicts.add('Unrealistic years of experience (' + cv.yearsOfExperience + ') - discarded.');
+            cv.conflicts.add(
+                'Years of experience: the value ' + cv.yearsOfExperience + ' is outside a realistic range and was not saved.'
+            );
             cv.yearsOfExperience = null;
         }
     }

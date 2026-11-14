@@ -9,6 +9,10 @@ public with sharing class ParsedCv {
     public String phone;
     public String title;
     public Integer yearsOfExperience;
+    /** Years the candidate claims in the text (LLM). Reconciled by CvParserService. */
+    public Integer statedYearsOfExperience;
+    /** Years derived from employment dates (LLM). Reconciled by CvParserService. */
+    public Integer computedYearsOfExperience;
     public List<String> skills = new List<String>();
     public List<ExperienceItem> experience = new List<ExperienceItem>();
     public List<EducationItem> education = new List<EducationItem>();
@@ -16,10 +20,14 @@ public with sharing class ParsedCv {
 
     /** Contradictions found inside the CV (e.g. two different emails). */
     public List<String> conflicts = new List<String>();
+    /** Values that are vague, ambiguous or were derived rather than stated. */
+    public List<String> uncertainties = new List<String>();
     /** Filled by the service, never trusted from the model. */
     public List<String> missingFields = new List<String>();
     /** 'Prompt Template' or 'Rule-based fallback' - surfaced to the recruiter. */
     public String parsedBy;
+    /** Why the LLM path was not used (only set for the fallback) - written to the audit log. */
+    public String fallbackReason;
 
     /** JSON from the model may contain explicit nulls - make collections safe to use. */
     public ParsedCv normalize() {
@@ -28,6 +36,7 @@ public with sharing class ParsedCv {
         education = education == null ? new List<EducationItem>() : education;
         achievements = achievements == null ? new List<String>() : achievements;
         conflicts = conflicts == null ? new List<String>() : conflicts;
+        uncertainties = uncertainties == null ? new List<String>() : uncertainties;
         missingFields = new List<String>();
         name = String.isBlank(name) ? null : name.trim();
         email = String.isBlank(email) ? null : email.trim().toLowerCase();

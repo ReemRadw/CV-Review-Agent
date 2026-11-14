@@ -60,6 +60,15 @@
                 onchange={handleFileInput}
                 tabindex="-1"
             />
+            <!-- Hidden Visualforce helper that reads PDFs outside the LWS sandbox -->
+            <iframe
+                class="pdf-reader"
+                src={pdfReaderUrl}
+                title="PDF reader"
+                aria-hidden="true"
+                tabindex="-1"
+                onload={handlePdfFrameLoad}
+            ></iframe>
 
             <!-- Queue -->
             <template lwc:if={hasItems}>
@@ -158,6 +167,17 @@
                                                     <span key={field} class="chip chip_warning">{field}</span>
                                                 </template>
                                             </div>
+                                        </div>
+                                    </template>
+
+                                    <template lwc:if={item.result.hasUncertainties}>
+                                        <div class="flag flag_info">
+                                            <span class="flag__label">Uncertain or inferred</span>
+                                            <ul class="flag__list">
+                                                <template for:each={item.result.uncertainties} for:item="note">
+                                                    <li key={note}>{note}</li>
+                                                </template>
+                                            </ul>
                                         </div>
                                     </template>
 

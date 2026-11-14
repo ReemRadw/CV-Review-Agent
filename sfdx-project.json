@@ -1,12 +1,16 @@
-{
-  "packageDirectories": [
-    {
-      "path": "force-app",
-      "default": true
-    }
-  ],
-  "name": "CV Review Agent",
-  "namespace": "",
-  "sfdcLoginUrl": "https://login.salesforce.com",
-  "sourceApiVersion": "66.0"
+﻿{
+    "packageDirectories":  [
+                               {
+                                   "path":  "force-app",
+                                   "default":  true
+                               },
+                               {
+                                   "path":  "agent-tests",
+                                   "default":  false
+                               }
+                           ],
+    "name":  "CV Review Agent",
+    "namespace":  "",
+    "sfdcLoginUrl":  "https://login.salesforce.com",
+    "sourceApiVersion":  "66.0"
 }

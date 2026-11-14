@@ -1,0 +1,70 @@
+<apex:page showHeader="false" sidebar="false" standardStylesheets="false" applyHtmlTag="true" applyBodyTag="false" docType="html-5.0">
+    <!--
+        Hidden helper page used by the cvUploader LWC.
+        PDF.js does not run reliably inside Lightning Web Security, so PDF text
+        extraction happens here (Visualforce domain, no LWS) and the result is
+        sent back to the component with postMessage.
+    -->
+    <body>
+        <script src="{!URLFOR($Resource.pdfjs, 'pdf.min.js')}"></script>
+        <script src="{!URLFOR($Resource.pdfjs, 'pdf.worker.min.js')}"></script>
+        <script>
+            (function () {
+                // Only the org's Lightning domain may talk to this page.
+                var ALLOWED_ORIGIN = /^https:\/\/[a-z0-9.-]+\.(lightning\.force\.com|my\.salesforce\.com)$/i;
+
+                pdfjsLib.GlobalWorkerOptions.workerSrc = "{!URLFOR($Resource.pdfjs, 'pdf.worker.min.js')}";
+
+                async function extract(buffer) {
+                    var pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buffer), isEvalSupported: false }).promise;
+                    var pages = [];
+                    for (var pageNo = 1; pageNo <= pdf.numPages; pageNo++) {
+                        var page = await pdf.getPage(pageNo);
+                        var content = await page.getTextContent();
+                        var lastY = null;
+                        var text = '';
+                        content.items.forEach(function (item) {
+                            var y = item.transform[5];
+                            if (lastY !== null && Math.abs(y - lastY) > 2) {
+                                text += '\n';
+                            } else if (text && !/ $/.test(text) && item.str && !/^ /.test(item.str)) {
+                                text += ' ';
+                            }
+                            text += item.str;
+                            lastY = y;
+                        });
+                        pages.push(text);
+                    }
+                    return pages.join('\n\n');
+                }
+
+                window.addEventListener('message', function (event) {
+                    var msg = event.data;
+                    if (!ALLOWED_ORIGIN.test(event.origin) || !msg) {
+                        return;
+                    }
+                    if (msg.type === 'cv-pdf-ping') {
+                        event.source.postMessage({ type: 'cv-pdf-ready' }, event.origin);
+                        return;
+                    }
+                    if (msg.type !== 'cv-pdf-extract') {
+                        return;
+                    }
+                    extract(msg.buffer)
+                        .then(function (text) {
+                            event.source.postMessage({ type: 'cv-pdf-result', id: msg.id, text: text }, event.origin);
+                        })
+                        .catch(function (error) {
+                            event.source.postMessage(
+                                { type: 'cv-pdf-result', id: msg.id, error: (error && error.message) || 'Unreadable PDF' },
+                                event.origin
+                            );
+                        });
+                });
+
+                // Tell the parent component we are ready to receive files.
+                window.parent.postMessage({ type: 'cv-pdf-ready' }, '*');
+            })();
+        </script>
+    </body>
+</apex:page>

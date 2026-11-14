@@ -1,0 +1,25 @@
+Karim Fathy
+Salesforce Technical Lead
+karim.fathy@example.com | karim.f.work@example.org | +20 122 444 0198
+
+SUMMARY
+Technical lead with 12 years of Salesforce experience.
+
+EXPERIENCE
+Technical Lead - Zenith Cloud (full-time)
+Jan 2021 - Present
+- Leads a team of 6 developers on Service Cloud projects.
+
+Senior Developer - Atlas Systems (full-time)
+Mar 2020 - Aug 2023
+- Built LWC components and Apex integrations.
+
+Developer - Orion Labs
+Sep 2023 - Feb 2022
+- Apex triggers and batch jobs.
+
+SKILLS
+Apex, LWC, SOQL, Flows, REST API, Git
+
+EDUCATION
+B.Sc. Information Systems - Helwan University, 2019

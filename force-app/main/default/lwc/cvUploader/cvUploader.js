@@ -5,6 +5,8 @@ import processCv from '@salesforce/apex/CvIngestionController.processCv';
 import getRecentCandidates from '@salesforce/apex/CvIngestionController.getRecentCandidates';
 import {
     SUPPORTED_EXTENSIONS,
+    PDF_READER_URL,
+    PdfBridge,
     loadLibraries,
     getExtension,
     readAsArrayBuffer,
@@ -43,9 +45,20 @@ export default class CvUploader extends NavigationMixin(LightningElement) {
     libraryError;
 
     acceptAttr = SUPPORTED_EXTENSIONS.map((ext) => `.${ext}`).join(',');
+    pdfReaderUrl = PDF_READER_URL;
+    pdfBridge = new PdfBridge();
 
     connectedCallback() {
+        this.pdfBridge.connect();
         this.loadRecent();
+    }
+
+    disconnectedCallback() {
+        this.pdfBridge.disconnect();
+    }
+
+    handlePdfFrameLoad(event) {
+        this.pdfBridge.ping(event.target.contentWindow);
     }
 
     renderedCallback() {
@@ -219,7 +232,7 @@ export default class CvUploader extends NavigationMixin(LightningElement) {
             const buffer = await readAsArrayBuffer(item.file);
 
             this.update(item, 'extracting');
-            const text = await extractText(item.name, buffer);
+            const text = await extractText(item.name, buffer, this.pdfBridge);
 
             let base64 = null;
             if (item.size <= MAX_ATTACH_BYTES) {
@@ -230,6 +243,9 @@ export default class CvUploader extends NavigationMixin(LightningElement) {
 
             this.update(item, 'analyzing');
             const result = await processCv({ fileName: item.name, cvText: text, base64File: base64 });
+            if (result.errorMessage) {
+                throw new Error(result.errorMessage);
+            }
             item.result = this.decorateResult(result);
             this.update(item, 'done');
         } catch (error) {
@@ -250,6 +266,7 @@ export default class CvUploader extends NavigationMixin(LightningElement) {
             moreSkills: skills.length > 6 ? `+${skills.length - 6}` : null,
             hasMissing: (result.missingFields || []).length > 0,
             hasConflicts: (result.conflicts || []).length > 0,
+            hasUncertainties: (result.uncertainties || []).length > 0,
             sourceLabel: result.updatedExisting ? 'Updated existing candidate' : 'New candidate',
             isFallback: result.parsedBy !== 'Prompt Template'
         };

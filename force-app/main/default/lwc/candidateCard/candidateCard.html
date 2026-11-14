@@ -1,0 +1,98 @@
+<template>
+    <article class="card">
+        <template lwc:if={error}>
+            <p class="empty">{error}</p>
+        </template>
+
+        <template lwc:if={isLoaded}>
+            <!-- Header -->
+            <header class="head">
+                <div class="head__main">
+                    <p class="eyebrow">Candidate Card</p>
+                    <h2 class="name">{name}</h2>
+                    <p class="meta">{title} · {yearsLabel}</p>
+                    <p class="meta meta_contact">
+                        <lightning-icon icon-name="utility:email" size="xx-small"></lightning-icon>
+                        <span>{email}</span>
+                        <lightning-icon icon-name="utility:call" size="xx-small"></lightning-icon>
+                        <span>{phone}</span>
+                    </p>
+                </div>
+                <div class="head__status">
+                    <span class={statusClass}>{status}</span>
+                    <p class="hint">{statusHint}</p>
+                </div>
+            </header>
+
+            <!-- Data quality -->
+            <section class="quality">
+                <template lwc:if={isClean}>
+                    <div class="panel panel_success">
+                        <span class="panel__label">Data quality</span>
+                        <p>No missing, uncertain or conflicting information was detected.</p>
+                    </div>
+                </template>
+
+                <template lwc:if={hasConflicts}>
+                    <div class="panel panel_error">
+                        <span class="panel__label">Conflicting details</span>
+                        <ul>
+                            <template for:each={conflicts} for:item="item">
+                                <li key={item.key}>{item.text}</li>
+                            </template>
+                        </ul>
+                    </div>
+                </template>
+
+                <template lwc:if={hasUncertain}>
+                    <div class="panel panel_info">
+                        <span class="panel__label">Uncertain or inferred</span>
+                        <ul>
+                            <template for:each={uncertain} for:item="item">
+                                <li key={item.key}>{item.text}</li>
+                            </template>
+                        </ul>
+                    </div>
+                </template>
+
+                <template lwc:if={hasMissing}>
+                    <div class="panel panel_warning">
+                        <span class="panel__label">Not stated in the CV</span>
+                        <div class="chips">
+                            <template for:each={missing} for:item="item">
+                                <span key={item.key} class="chip chip_warning">{item.text}</span>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+            </section>
+
+            <!-- Skills -->
+            <section class="block">
+                <h3 class="block__title">Skills</h3>
+                <template lwc:if={hasSkills}>
+                    <div class="chips">
+                        <template for:each={skills} for:item="item">
+                            <span key={item.key} class="chip">{item.text}</span>
+                        </template>
+                    </div>
+                </template>
+                <template lwc:else>
+                    <p class="empty">Not stated in the CV</p>
+                </template>
+            </section>
+
+            <!-- Experience, education, achievements -->
+            <template for:each={sections} for:item="section">
+                <section key={section.key} class="block">
+                    <h3 class="block__title">{section.label}</h3>
+                    <p class={section.css}>{section.display}</p>
+                </section>
+            </template>
+        </template>
+
+        <template lwc:if={isLoading}>
+            <lightning-spinner alternative-text="Loading candidate card" size="small"></lightning-spinner>
+        </template>
+    </article>
+</template>

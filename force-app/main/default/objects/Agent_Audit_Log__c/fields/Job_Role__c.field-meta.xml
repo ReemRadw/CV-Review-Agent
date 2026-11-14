@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Job_Role__c</fullName>
+    <deleteConstraint>SetNull</deleteConstraint>
+    <label>Job Role</label>
+    <referenceTo>Job_Role__c</referenceTo>
+    <relationshipLabel>Agent Audit Logs</relationshipLabel>
+    <relationshipName>Agent_Audit_Logs</relationshipName>
+    <required>false</required>
+    <type>Lookup</type>
+</CustomField>

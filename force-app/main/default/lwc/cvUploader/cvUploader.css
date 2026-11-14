@@ -345,6 +345,19 @@
     background: #fffaf2;
 }
 
+.flag_info {
+    border-color: var(--cv-accent);
+    background: var(--cv-accent-soft);
+}
+
+.pdf-reader {
+    position: absolute;
+    width: 0;
+    height: 0;
+    border: 0;
+    visibility: hidden;
+}
+
 .flag_error {
     border-color: var(--cv-error);
     background: var(--cv-error-soft);
